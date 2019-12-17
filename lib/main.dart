@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/webrtc.dart';
@@ -40,6 +43,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void initState() {
+    sleep(Duration(seconds:2));
     _connect();
 
     // TODO: implement initState
@@ -83,7 +87,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
 _connect() async {
   // The location of the SignalR Server.
-  final serverUrl = "http://70ab5738.ngrok.io/sgr/rtc";
+  final serverUrl = "https://4d04aa8a.ngrok.io/sgr/rtc";
 
   Logger.root.level = Level.ALL;
 
@@ -121,7 +125,7 @@ Future<void> _callToUserList(List<Object> parameters) async {
    response.users.forEach(
       (user) => {
          if(!_connections.containsKey(user.connectionId) && user.connectionId != currentConnectionId){
-        //   _initiateOffer(user)
+          _initiateOffer(user)
          }
       }
    );
@@ -134,16 +138,19 @@ Future<void> _initiateOffer(IUser acceptingUser) async {
   print('Initiate offer to ' + acceptingUser.connectionId);
 
   final iceServers = await getIceServers();
-  var connection = getConnection(acceptingUser.connectionId, iceServers);
+   List<RTCIceServer> serversList = iceServers.map((i) => RTCIceServer.fromJson(i)).toList();
+  // var connection = getConnection(acceptingUser.connectionId, serversList);
 }
 
-getConnection(String connectionId, List<RTCIceServer> iceServers) {}
 
-Future<List<RTCIceServer>> getIceServers() async {
-  var results =  await _hubConnection.invoke('GetIceServers');
+// UserConnection getConnection(String connectionId, List<RTCIceServer> iceServers) {
+//   var connection = _connections.keys(connectionId) || createConnection(connectionId,iceServers);
+//   return connection;
+// }
 
+Future<List<dynamic>> getIceServers() async {
+  var results =  await _hubConnection.invoke('GetIceServers') as List;
   return results;
-
 }
 
 class RTCIceServer {
@@ -154,9 +161,9 @@ class RTCIceServer {
   RTCIceServer(this.Urls, this.Username, this.Credential);
 
   RTCIceServer.fromJson(Map<String, dynamic> json)
-      : Urls = json['Urls'],
-        Username = json['Username'],
-        Credential = json['Credential'];
+      : Urls = json['urls'],
+        Username = json['username'],
+        Credential = json['credential'];
 
   Map<String, dynamic> toJson() =>
       {'Urls': Urls, 'Username': Username, 'Credential': Credential};
