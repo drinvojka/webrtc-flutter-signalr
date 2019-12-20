@@ -165,7 +165,7 @@ final Map<String, dynamic> constraints = {
 
 _connect() async {
   // The location of the SignalR Server.
-  final serverUrl = "https://bbcc9534.ngrok.io/sgr/rtc";
+  final serverUrl = "https://0f145986.ngrok.io/sgr/rtc";
 
   Logger.root.level = Level.WARNING;
 
@@ -199,20 +199,15 @@ _connect() async {
     var user = IUser('', currentConnectionId);
     _connections[currentConnectionId] = new UserConnection(user, true, null);
     currentRoomName = 'Test1';
-    _hubConnection.invoke('Join', args: <Object>["Test123124", "Test1"]);
+    _hubConnection.invoke('Join', args: <Object>["mobile2", "Test1"]);
   } else
     return;
 }
 
 Future<void> _initiateOffer(IUser acceptingUser) async {
-  var partnerClientId = acceptingUser.connectionId;
   print('Initiate offer to ' + acceptingUser.connectionId);
-
-  final iceServers = await getIceServers();
-  List<RTCIceServer> serversList =
-      iceServers.map((i) => RTCIceServer.fromJson(i)).toList();
   var connection = await getConnection(acceptingUser.connectionId);
-  var stream = await signal.createStream('video', true);
+  var stream = await signal.createStream('video', false);
   stream
       .getVideoTracks()
       .forEach((track) => {connection.rtcConnection.addStream(stream)});
@@ -291,7 +286,7 @@ _onRenegotiationNeeded() async {
     var desc = await connection.createOffer(constraints);
     await connection.setLocalDescription(desc);
     await _sendSignal(
-        new ISignal(type: SignalType.videoOffer, sdp: desc), user.connectionId);
+        new ISignal(type: SignalType.videoOffer, sdp: desc), partnerId);
   }
 
   userConnection.creatingOffer = false;
@@ -326,10 +321,17 @@ _iceConnectionStateChanged(RTCIceConnectionState state) {
 _sendSignal(ISignal signal, String partnerClientId) async {
   try {
     var e = signal.toJson();
+    var s = jsonEncode(e);
+    if(e['sdp'] == null || e['sdp'] == ''){
+      e['sdp'] = "''";
+    }
+    else if(e['candidate'] == null || e['candidate'] == ''){
+      e['candidate'] = "''";
+    }
     print(e);
     //  print('SIGNAL TO JSON ->>>>>' + p);
     await _hubConnection
-        .invoke('SendSignal', args: <Object>[signal.toJson(), partnerClientId]);
+        .invoke('SendSignal', args: <Object>[s, partnerClientId]);
   } catch (expection) {
     print('_SendSignal Excpection');
     print(expection);
@@ -423,22 +425,22 @@ class ISignal {
       RTCIceCandidate this.candidate = null}) {}
 
   ISignal.fromJson(Map<String, dynamic> parsedJson)
-      : type = getStatusFromString(parsedJson['type'].toString()),
-        sdp = RTCSessionDescription.fromJson(parsedJson['sdp']),
-        candidate = RTCIceCandidate.fromJson(parsedJson['candidate']);
+      : type = getStatusFromString(parsedJson['type']),
+        sdp = parsedJson['sdp'] == null ? null : RTCSessionDescription.fromJson(parsedJson['sdp']),
+        candidate = parsedJson['candidate'] == null ? null : RTCIceCandidate.fromJson(parsedJson['candidate']);
 
   Map<String, dynamic> toJson() => {
-        'type': type.index,
-        'sdp': sdp == null ? "" : sdp.toJson(),
-        'candidate': candidate == null ? '' : jsonEncode(candidate)
+        'type': type.index.toString(),
+        'sdp': sdp == null ? "{}" : sdp.toJson(),
+        'candidate': candidate == null ? "{}" : candidate.toJson()
       };
 }
 
 enum SignalType { newIceCandidate, videoOffer, videoAnswer }
 
-SignalType getStatusFromString(String statusAsString) {
+SignalType getStatusFromString(int statusAsString) {
   for (SignalType element in SignalType.values) {
-    if (element.toString() == statusAsString) {
+    if (element.index == statusAsString) {
       return element;
     }
   }
@@ -471,10 +473,16 @@ Future<RTCPeerConnection> createPeerConnection2(
 
 Future<void> _signalReceived(List<Object> arguments) async {
   try {
-    print(arguments);
     print('SignalReceived is Called !');
-    var us = IUser.fromJson(arguments[0]);
-    var sign = ISignal.fromJson(arguments[1]);
+    print("1 : "+ arguments.first.toString());
+    print("2 : " +arguments.last.toString());
+
+
+
+   var userDecoded = json.decode(arguments.first);
+   var signalDecoded = json.decode(arguments.last);
+    var us = IUser.fromJson(userDecoded);
+    var sign = ISignal.fromJson(signalDecoded);
     await _newSignal(us, sign);
     print('SignalReceived has ended !');
   } catch (exception) {
@@ -523,10 +531,11 @@ receivedVideoOffer(String partnerClientId, RTCSessionDescription sdp) async {
     print('create answer');
     var answer = await connection.rtcConnection.createAnswer(constraints);
     print('set local descriptor ' + answer.toString());
+    var desc =  await connection.rtcConnection.getLocalDescription();
     await _sendSignal(
         new ISignal(
             type: SignalType.videoAnswer,
-            sdp: await connection.rtcConnection.getLocalDescription()),
+            sdp: desc),
         partnerClientId);
   } catch (expection) {}
 
